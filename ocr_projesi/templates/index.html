@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>El Yazısı OCR</title>
+    <link rel="stylesheet" href="/static/index.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="title">Resimden yazıya ve daha fazlası !</h1>
+      <p class="subtitle">
+        Resimdeki yazıları metne çevir, anında kopyala veya indir!
+      </p>
+      <form id="upload-form" enctype="multipart/form-data">
+        <label for="language" class="language-label">
+          Dil Seç:
+          <select id="language" name="language">
+            <option value="tur">Türkçe</option>
+            <option value="eng">İngilizce</option>
+            <option value="tur+eng">Türkçe + İngilizce</option>
+          </select>
+        </label>
+        <label for="text-type" class="language-label">
+          Metin Türü:
+          <select id="text-type" name="text-type">
+            <option value="handwritten">El Yazısı</option>
+            <option value="printed">Basılı Metin</option>
+          </select>
+        </label>
+        <label for="image" class="file-label">
+          <span>Resim Seç</span>
+          <input
+            type="file"
+            id="image"
+            name="image"
+            accept="image/*"
+            required
+          />
+        </label>
+        <p id="selected-file" class="selected-file hidden">
+          Seçilen: <span id="file-name"></span>
+        </p>
+        <div id="preview" class="preview hidden">
+          <h3>Ön İzleme</h3>
+          <img id="preview-image" src="" alt="Görüntü Ön İzleme" />
+        </div>
+        <button type="submit" class="upload-btn">Yükle ve Çevir</button>
+        <button type="button" onclick="resetForm()" class="reset-btn">
+          Temizle
+        </button>
+      </form>
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>Yükleniyor...</p>
+      </div>
+      <div id="result" class="result hidden">
+        <h2>Sonuç</h2>
+        <p id="longest-word" class="word-info">En uzun kelime: <span></span></p>
+        <p id="shortest-word" class="word-info">
+          En kısa kelime: <span></span>
+        </p>
+        <p id="word-count" class="word-info">
+          Toplam kelime sayısı: <span></span>
+        </p>
+        <p id="char-count" class="word-info">
+          Toplam karakter sayısı: <span></span>
+        </p>
+        <p id="turkish-char-count" class="word-info">
+          Türkçe özel karakter sayısı: <span></span>
+        </p>
+        <textarea id="output-text"></textarea>
+        <button onclick="copyText()" class="copy-btn">Metni Kopyala</button>
+        <button onclick="downloadText()" class="download-btn">
+          Metni İndir
+        </button>
+      </div>
+    </div>
+    <script>
+      const form = document.getElementById("upload-form");
+      const resultDiv = document.getElementById("result");
+      const loadingDiv = document.getElementById("loading");
+      const outputText = document.getElementById("output-text");
+      const longestWordSpan = document.querySelector("#longest-word span");
+      const shortestWordSpan = document.querySelector("#shortest-word span");
+      const wordCountSpan = document.querySelector("#word-count span");
+      const charCountSpan = document.querySelector("#char-count span");
+      const turkishCharCountSpan = document.querySelector(
+        "#turkish-char-count span"
+      );
+      const fileInput = document.getElementById("image");
+      const selectedFileText = document.getElementById("selected-file");
+      const fileNameSpan = document.getElementById("file-name");
+      const previewDiv = document.getElementById("preview");
+      const previewImage = document.getElementById("preview-image");
+
+      // Dosya seçildiğinde dosya adını ve ön izlemeyi göster
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) {
+          fileNameSpan.textContent = fileInput.files[0].name;
+          selectedFileText.classList.remove("hidden");
+
+          // Görüntü ön izleme
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            previewImage.src = e.target.result;
+            previewDiv.classList.remove("hidden");
+          };
+          reader.readAsDataURL(fileInput.files[0]);
+        } else {
+          selectedFileText.classList.add("hidden");
+          previewDiv.classList.add("hidden");
+        }
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        loadingDiv.classList.remove("hidden");
+        resultDiv.classList.add("hidden");
+        selectedFileText.classList.add("hidden");
+        previewDiv.classList.add("hidden");
+        const formData = new FormData(form);
+        try {
+          const response = await fetch("/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await response.json();
+          loadingDiv.classList.add("hidden");
+          if (data.text && !data.text.startsWith("OCR hatası")) {
+            outputText.value = data.text;
+            longestWordSpan.textContent = data.longest_word;
+            shortestWordSpan.textContent = data.shortest_word;
+            wordCountSpan.textContent = data.word_count;
+            charCountSpan.textContent = data.char_count;
+            turkishCharCountSpan.textContent = data.turkish_char_count;
+            resultDiv.classList.remove("hidden");
+          } else {
+            alert("Hata: " + (data.error || data.text));
+          }
+        } catch (error) {
+          loadingDiv.classList.add("hidden");
+          alert("Bir hata oluştu: " + error.message);
+        }
+      });
+
+      function copyText() {
+        outputText.select();
+        document.execCommand("copy");
+        const copyBtn = document.querySelector(".copy-btn");
+        copyBtn.textContent = "Kopyalandı!";
+        copyBtn.classList.add("copied");
+        setTimeout(() => {
+          copyBtn.textContent = "Metni Kopyala";
+          copyBtn.classList.remove("copied");
+        }, 2000);
+      }
+
+      function downloadText() {
+        const text = outputText.value;
+        const blob = new Blob([text], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "ocr_result.txt";
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function resetForm() {
+        form.reset();
+        selectedFileText.classList.add("hidden");
+        previewDiv.classList.add("hidden");
+        resultDiv.classList.add("hidden");
+        COMEoutputText.value = "";
+        longestWordSpan.textContent = "";
+        shortestWordSpan.textContent = "";
+        wordCountSpan.textContent = "";
+        charCountSpan.textContent = "";
+        turkishCharCountSpan.textContent = "";
+        previewImage.src = "";
+      }
+    </script>
+  </body>
+</html>
